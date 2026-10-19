@@ -73,6 +73,24 @@ function summarizeConfig(config) {
   return elections;
 }
 
+function normalizeUf(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeOffice(value) {
+  const raw = String(value || "").trim();
+  if (!/^\d{1,4}$/.test(raw)) return null;
+  return raw.padStart(4, "0");
+}
+
+function normalizeElection(value) {
+  const raw = String(value || "").trim();
+  if (!/^\d{1,6}$/.test(raw)) return null;
+  return raw.padStart(6, "0");
+}
+
+const VALID_UFS = new Set(["ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma", "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn", "rs", "ro", "rr", "sc", "sp", "se", "to"]);
+
 export default async (request) => {
   const url = new URL(request.url);
   const path = getPath(url);
@@ -84,8 +102,71 @@ export default async (request) => {
       status: "ok",
       service: "tse-portal-api",
       data_source: "not_yet_validated",
-      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial"]
+      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial", "/api/results?ambiente=simulado&uf=sp&cargo=0001&eleicao=21270"]
     });
+  }
+
+  if (path === "/results") {
+    const ambiente = (url.searchParams.get("ambiente") || "simulado").toLowerCase();
+    const uf = normalizeUf(url.searchParams.get("uf"));
+    const cargo = normalizeOffice(url.searchParams.get("cargo"));
+    const election = normalizeElection(url.searchParams.get("eleicao"));
+
+    if (!["oficial", "simulado"].includes(ambiente)) {
+      return json({ error: "invalid_environment", allowed: ["oficial", "simulado"] }, 400);
+    }
+    if (!VALID_UFS.has(uf)) return json({ error: "invalid_uf", message: "Informe a sigla de uma UF brasileira, por exemplo sp." }, 400);
+    if (!cargo) return json({ error: "invalid_cargo", allowed_examples: ["0001", "0003", "0005", "0006", "0007", "0008"] }, 400);
+    if (!election) return json({ error: "invalid_eleicao", message: "Informe o código da eleição retornado pelo EA11, por exemplo 21270." }, 400);
+
+    const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
+    const host = ambiente === "simulado" ? "https://resultados-sim.tse.jus.br" : "https://resultados.tse.jus.br";
+    const electionFileCode = election;
+    const fileName = `${uf}-c${cargo}-e${electionFileCode}-u.json`;
+    const sourceUrl = `${host}/${ambiente}/${cycle}/${Number(election)}/dados/${uf}/${fileName}`;
+
+    try {
+      const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
+      if (!result.ok) {
+        return json({
+          status: "result_unavailable",
+          source: "TSE",
+          environment: ambiente,
+          uf: uf.toUpperCase(),
+          office_code: cargo,
+          election_code: election,
+          attempted_url: sourceUrl,
+          http_status: result.status,
+          message: result.status === 404
+            ? "O arquivo unificado não foi encontrado neste caminho. Nenhuma URL alternativa foi tentada. Confirme o código da eleição e o arquivo publicado pelo TSE."
+            : "Não foi possível obter o arquivo de resultados. Nenhuma repetição automática foi feita."
+        }, 502);
+      }
+      return json({
+        status: "connected",
+        source: "TSE",
+        environment: ambiente,
+        phase: ambiente === "simulado" ? "simulado" : "oficial_pendente_de_validacao",
+        uf: uf.toUpperCase(),
+        office_code: cargo,
+        election_code: election,
+        result_file: fileName,
+        result_url: sourceUrl,
+        retrieved_at: new Date().toISOString(),
+        cached: result.cached,
+        data: result.data
+      });
+    } catch (error) {
+      return json({
+        status: "result_unavailable",
+        source: "TSE",
+        environment: ambiente,
+        attempted_url: sourceUrl,
+        message: error?.name === "TimeoutError"
+          ? "O TSE não respondeu dentro de 8 segundos. Não houve repetição automática."
+          : "Falha ao consultar ou interpretar o arquivo de resultados. Não houve repetição automática."
+      }, 502);
+    }
   }
 
   if (path === "/tse-config" || path === "/elections") {
@@ -178,5 +259,5 @@ export default async (request) => {
     }
   }
 
-  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections"] }, 404);
+  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections", "/api/results"] }, 404);
 };
