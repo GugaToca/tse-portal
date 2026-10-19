@@ -106,7 +106,7 @@ async function mapStateResult({ ambiente, uf, cargo, election }) {
   const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
   const host = ambiente === "simulado" ? "https://resultados-sim.tse.jus.br" : "https://resultados.tse.jus.br";
   const fileName = `${uf}-c${cargo}-e${election}-u.json`;
-  const sourceUrl = `${host}/${ambiente}/${cycle}/ele2026/${Number(election)}/dados/${uf}/${fileName}`;
+  const sourceUrl = `${host}/${ambiente}/${cycle}/${Number(election)}/dados/${uf}/${fileName}`;
   try {
     const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
     if (!result.ok) return { uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "unavailable", http_status: result.status };
@@ -254,14 +254,14 @@ export default async (request) => {
 
     const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
     const host = ambiente === "simulado" ? "https://resultados-sim.tse.jus.br" : "https://resultados.tse.jus.br";
-    // A documentação do TSE coloca o ciclo eleitoral (ex.: ele2026)
-    // entre o ambiente e o código numérico da eleição. O diretório usa o
-    // código sem zeros à esquerda; o nome do arquivo usa seis dígitos.
+    // A documentação do TSE coloca o ciclo eleitoral (ex.: ele2026) e, em seguida,
+    // o código numérico da eleição. Não repetir o ciclo antes do código.
+    // O diretório usa o código sem zeros à esquerda; o nome do arquivo usa seis dígitos.
     // Use a UF solicitada para que o mapa possa mostrar resultados estaduais.
     // Informe uf=br quando quiser o consolidado nacional.
     const scope = uf;
     const fileName = `${scope}-c${cargo}-e${election}-u.json`;
-    const sourceUrl = `${host}/${ambiente}/${cycle}/ele2026/${Number(election)}/dados/${scope}/${fileName}`;
+    const sourceUrl = `${host}/${ambiente}/${cycle}/${Number(election)}/dados/${scope}/${fileName}`;
 
     try {
       const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
@@ -309,14 +309,16 @@ export default async (request) => {
       return json({ error: "invalid_environment", allowed: ["oficial", "simulado"] }, 400);
     }
 
-    // O ciclo faz parte do caminho conforme EA11. Estes são os ciclos indicados
-    // na documentação/URL de referência recebida; o oficial pode não estar publicado
-    // ou ter ciclo diferente. Não se tenta descobrir caminhos por tentativa e erro.
+    // O simulado publica a configuração sob /simulado/simulado2026/comum/.
+    // A configuração oficial fica em /oficial/comum/. Não fazer tentativas
+    // alternativas automáticas para evitar 404 repetidos e bloqueio do TSE.
     const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
     const host = ambiente === "simulado"
       ? "https://resultados-sim.tse.jus.br"
       : "https://resultados.tse.jus.br";
-    const sourceUrl = `${host}/${ambiente}/${cycle}/comum/config/ele-c.json`;
+    const sourceUrl = ambiente === "simulado"
+      ? `${host}/${ambiente}/${cycle}/comum/config/ele-c.json`
+      : `${host}/${ambiente}/comum/config/ele-c.json`;
 
     try {
       const result = await fetchJsonOnce(`ea11:${ambiente}:${cycle}`, sourceUrl);
