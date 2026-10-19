@@ -4,8 +4,136 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Apuração Brasil | Portal independente</title>
 <style>
-:root{color-scheme:dark;--bg:#06111f;--panel:#0c1d30;--line:#1b3550;--muted:#9fb3c9;--blue:#2385f5;--green:#10c98b}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 30%,#102b46,var(--bg) 70%);font:15px system-ui,Segoe UI,sans-serif;color:#f4f8fc}header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 3vw;border-bottom:1px solid var(--line);background:#06111fe8;position:sticky;top:0;z-index:2}h1{font-size:clamp(20px,2.3vw,30px);margin:0}h2{font-size:18px;margin:0 0 14px}.muted{color:var(--muted)}.status{font-size:12px;color:var(--green)}main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;padding:18px;max-width:1800px;margin:auto}.panel{background:#0b1b2ceF;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 12px 40px #0002}.map-panel{min-height:650px;display:flex;flex-direction:column}.map-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.map-wrap{flex:1;display:grid;place-items:center;min-height:500px}.map-wrap svg{width:min(100%,980px);height:auto;max-height:76vh;overflow:visible}.state-shape{fill:#123a60;stroke:#9bc6e9;stroke-width:1.15;vector-effect:non-scaling-stroke;cursor:pointer;transition:fill .15s}.state-shape:hover,.state-shape:focus,.state-shape.selected{fill:#1779d4;outline:none}.state-label{fill:#fff;font-size:12px;font-weight:750;pointer-events:none;text-anchor:middle;paint-order:stroke;stroke:#0b1b2c;stroke-width:2.6px;stroke-linejoin:round}.map-error{max-width:520px;text-align:center;color:var(--muted);line-height:1.5;padding:20px}.side{display:flex;flex-direction:column;gap:18px}.state-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);gap:12px}.state-row button{color:#f4f8fc;background:none;border:0;text-align:left;cursor:pointer;font:inherit}.pill{border:1px solid var(--line);border-radius:99px;padding:4px 8px;font-size:12px;color:var(--muted)}.notice{border:1px solid #795d23;background:#382b12;color:#f4dca2;border-radius:12px;padding:12px;font-size:13px;line-height:1.5}.legend{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}.bar{height:7px;background:#203348;border-radius:10px;overflow:hidden;margin-top:7px}.bar span{display:block;height:100%;width:0;background:var(--green)}footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}@media(max-width:1000px){main{grid-template-columns:1fr}.map-panel{min-height:unset}.map-wrap{min-height:350px}.map-wrap svg{max-height:none}.side{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}@media(max-width:560px){header{align-items:flex-start;flex-direction:column}.map-wrap{min-height:260px}main{padding:10px}.panel{padding:12px}}
+/* Ajuste responsivo para o portal Apuração Brasil */
+
+/* Computador/notebook: mapa e painel de resultados cabem na tela */
+@media (min-width: 1001px) {
+  main {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    align-items: start;
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .map-panel {
+    height: calc(100vh - 86px);
+    min-height: 0;
+  }
+
+  .map-wrap {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .map-wrap svg {
+    width: 100%;
+    height: 100%;
+    max-height: calc(100vh - 220px);
+    object-fit: contain;
+  }
+
+  .side {
+    position: sticky;
+    top: 78px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    gap: 12px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  #state-detail {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Tablet: conteúdo em uma coluna sem mapa excessivamente alto */
+@media (min-width: 561px) and (max-width: 1000px) {
+  main {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .map-panel {
+    min-height: 0;
+  }
+
+  .map-wrap {
+    min-height: 0;
+    height: min(58vh, 560px);
+  }
+
+  .map-wrap svg {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+/* Celular: controles e mapa adaptados à largura disponível */
+@media (max-width: 560px) {
+  header {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  main {
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .map-panel {
+    min-height: 0;
+  }
+
+  .map-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .map-wrap {
+    min-height: 0;
+    height: 48vh;
+    max-height: 420px;
+  }
+
+  .map-wrap svg {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .state-row {
+    gap: 8px;
+    padding: 8px 0;
+  }
+
+  #office-select {
+    max-width: 100%;
+  }
+}
+
 </style></head>
 <body><header><div><h1>🇧🇷 Apuração Brasil</h1><div class="muted">Portal independente de acompanhamento eleitoral</div></div><div><div class="status" id="source-status">● Conectando ao TSE oficial</div><div class="muted" id="updated">Validando conexão com o TSE oficial…</div></div></header>
 <main><section class="panel map-panel"><div class="map-head"><div><h2>Mapa interativo do Brasil</h2><div class="muted">Selecione um estado para abrir os resultados e o percentual de seções apuradas.</div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="muted" for="office-select">Cargo</label><select id="office-select" style="background:#10263b;color:#fff;border:1px solid var(--line);border-radius:8px;padding:8px"><option value="0001" data-election="6257">Presidente</option><option value="0003" data-election="6259" selected>Governador</option><option value="0005" data-election="6259">Senador</option><option value="0006" data-election="6257">Deputado Federal</option><option value="0007" data-election="6259">Deputado Estadual</option><option value="0008" data-election="6259">Deputado Distrital</option></select><button id="national-toggle" type="button" style="background:#0d765c;color:#fff;border:1px solid #1bb58a;border-radius:9px;padding:9px 12px;font-weight:700;cursor:pointer">🇧🇷 Resultado Nacional</button><span class="pill">27 UFs</span></div></div><div class="map-wrap" id="map-wrap"><div class="map-error" id="map-message">Carregando mapa geográfico oficializado a partir de dados públicos de estados brasileiros…</div></div><div class="legend"><span>• Estados selecionáveis</span><span>• Cores indicam o percentual de seções apuradas</span></div></section>
