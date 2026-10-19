@@ -89,7 +89,52 @@ function normalizeElection(value) {
   return raw.padStart(6, "0");
 }
 
-const VALID_UFS = new Set(["ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma", "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn", "rs", "ro", "rr", "sc", "sp", "se", "to"]);
+const VALID_UFS = new Set(["br", "ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma", "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn", "rs", "ro", "rr", "sc", "sp", "se", "to"]);
+
+function summarizeResults(data) {
+  const candidates = [];
+  const seen = new Set();
+  for (const office of data?.carg || []) {
+    for (const group of office?.agr || []) {
+      for (const party of group?.par || []) {
+        for (const candidate of party?.cand || []) {
+          const key = String(candidate?.sqcand || candidate?.n || candidate?.nm || "");
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          candidates.push({
+            id: candidate.sqcand || candidate.n || null,
+            number: candidate.n || null,
+            name: candidate.nm || candidate.nmu || "Nome não informado",
+            party: party.sg || party.nm || group.nm || null,
+            votes: Number(candidate.vap || 0),
+            vote_percent: Number(String(candidate.pvapn || candidate.pvap || "0").replace(",", ".")),
+            status: candidate.st || null,
+            situation: candidate.dvt || null
+          });
+        }
+      }
+    }
+  }
+  candidates.sort((a, b) => b.votes - a.votes);
+  const sections = data?.s || {};
+  const electors = data?.e || {};
+  return {
+    election_code: data?.ele || null,
+    round: data?.t || null,
+    phase: data?.f === "o" ? "oficial" : data?.f === "s" ? "simulado" : "desconhecida",
+    updated_date: data?.dg || data?.dt || null,
+    updated_time: data?.hg || data?.ht || null,
+    office: (data?.carg || []).map(item => ({ code: item.cd || null, name: item.nmn || item.nmm || item.nmf || null })),
+    turnout: {
+      sections_total: Number(sections.ts || 0),
+      sections_counted: Number(sections.si || 0),
+      sections_counted_percent: Number(String(sections.psin || sections.pstn || sections.pst || "0").replace(",", ".")),
+      electors_total: Number(electors.te || 0),
+      votes_total: Number(data?.v?.tv || 0)
+    },
+    candidates
+  };
+}
 
 export default async (request) => {
   const url = new URL(request.url);
@@ -124,8 +169,9 @@ export default async (request) => {
     // A documentação do TSE coloca o ciclo eleitoral (ex.: ele2026)
     // entre o ambiente e o código numérico da eleição. O diretório usa o
     // código sem zeros à esquerda; o nome do arquivo usa seis dígitos.
-    // Presidente é resultado nacional (br), não estadual.
-    const scope = cargo === "0001" ? "br" : uf;
+    // Use a UF solicitada para que o mapa possa mostrar resultados estaduais.
+    // Informe uf=br quando quiser o consolidado nacional.
+    const scope = uf;
     const fileName = `${scope}-c${cargo}-e${election}-u.json`;
     const sourceUrl = `${host}/${ambiente}/${cycle}/ele2026/${Number(election)}/dados/${scope}/${fileName}`;
 
@@ -146,20 +192,16 @@ export default async (request) => {
             : "Não foi possível obter o arquivo de resultados. Nenhuma repetição automática foi feita."
         }, 502);
       }
-      return json({
-        status: "connected",
-        source: "TSE",
-        environment: ambiente,
-        phase: ambiente === "simulado" ? "simulado" : "oficial_pendente_de_validacao",
-        uf: scope.toUpperCase(),
-        office_code: cargo,
-        election_code: election,
-        result_file: fileName,
-        result_url: sourceUrl,
-        retrieved_at: new Date().toISOString(),
-        cached: result.cached,
-        data: result.data
-      });
+      const common = {
+        status: "connected", source: "TSE", environment: ambiente,
+        phase: result.data?.f === "s" ? "simulado" : result.data?.f === "o" ? "oficial" : "desconhecida",
+        uf: scope.toUpperCase(), office_code: cargo, election_code: election,
+        result_file: fileName, result_url: sourceUrl, retrieved_at: new Date().toISOString(), cached: result.cached
+      };
+      if ((url.searchParams.get("formato") || "").toLowerCase() === "resumo") {
+        return json({ ...common, data: summarizeResults(result.data) });
+      }
+      return json({ ...common, data: result.data });
     } catch (error) {
       return json({
         status: "result_unavailable",
@@ -263,5 +305,5 @@ export default async (request) => {
     }
   }
 
-  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections", "/api/results"] }, 404);
+  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections", "/api/results", "/api/results?formato=resumo"] }, 404);
 };
