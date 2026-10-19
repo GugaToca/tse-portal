@@ -25,15 +25,23 @@
   }
   .map-wrap {
     min-height: 0;
+    min-width: 0;
     height: 0;
     flex: 1 1 auto;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .map-wrap svg {
+    display: block;
     width: 100%;
     height: 100%;
+    max-width: 100%;
     max-height: 100%;
-    object-fit: contain;
+    min-width: 0;
+    min-height: 0;
+    preserveAspectRatio: xMidYMid meet;
   }
   .side {
     position: sticky;
@@ -51,8 +59,8 @@
 @media (min-width: 561px) and (max-width: 1000px) {
   main { grid-template-columns: minmax(0, 1fr); padding: 12px; }
   .map-panel { min-height: 0; }
-  .map-wrap { min-height: 0; height: min(58vh, 560px); }
-  .map-wrap svg { width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
+  .map-wrap { min-height: 0; min-width: 0; height: min(58vh, 560px); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .map-wrap svg { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
   .side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 }
 @media (max-width: 560px) {
@@ -60,8 +68,8 @@
   main { display: flex; flex-direction: column; padding: 8px; gap: 10px; }
   .map-panel { min-height: 0; }
   .map-head { align-items: flex-start; flex-direction: column; }
-  .map-wrap { min-height: 0; height: 48vh; max-height: 420px; }
-  .map-wrap svg { width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
+  .map-wrap { min-height: 0; min-width: 0; height: 48vh; max-height: 420px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .map-wrap svg { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
   .side { display: flex; flex-direction: column; gap: 10px; }
   .state-row { gap: 8px; padding: 8px 0; }
   #office-select { max-width: 100%; }
@@ -78,7 +86,7 @@ const geoJsonUrl='https://raw.githubusercontent.com/codeforgermany/click_that_ho
 const ufByName={'acre':'AC','alagoas':'AL','amapá':'AP','amapa':'AP','amazonas':'AM','bahia':'BA','ceará':'CE','ceara':'CE','distrito federal':'DF','espírito santo':'ES','espirito santo':'ES','goiás':'GO','goias':'GO','maranhão':'MA','maranhao':'MA','mato grosso':'MT','mato grosso do sul':'MS','minas gerais':'MG','pará':'PA','para':'PA','paraíba':'PB','paraiba':'PB','paraná':'PR','parana':'PR','pernambuco':'PE','piauí':'PI','piaui':'PI','rio de janeiro':'RJ','rio grande do norte':'RN','rio grande do sul':'RS','rondônia':'RO','rondonia':'RO','roraima':'RR','santa catarina':'SC','são paulo':'SP','sao paulo':'SP','sergipe':'SE','tocantins':'TO'};
 function getUF(feature){const p=feature.properties||{};const direct=(p.sigla||p.SIGLA||p.uf||p.UF||p.postal||'').toString().toUpperCase();if(stateNames[direct])return direct;const name=(p.name||p.nome||p.NOME||p.state||'').toString().trim().toLocaleLowerCase('pt-BR');return ufByName[name]||null;}
 function coordsFromGeometry(g,out=[]){if(!g)return out;const addRing=ring=>ring.forEach(([x,y])=>out.push([x,y]));if(g.type==='Polygon')g.coordinates.forEach(addRing);else if(g.type==='MultiPolygon')g.coordinates.forEach(poly=>poly.forEach(addRing));return out;}
-function renderMap(data){const features=(data.features||[]).filter(f=>getUF(f));if(features.length<27)throw new Error('O arquivo geográfico não contém as 27 UFs esperadas.');const all=[];features.forEach(f=>coordsFromGeometry(f.geometry,all));const xs=all.map(c=>c[0]),ys=all.map(c=>c[1]);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);const W=900,H=780,pad=18,scale=Math.min((W-2*pad)/(maxX-minX),(H-2*pad)/(maxY-minY));const project=([x,y])=>[pad+(x-minX)*scale,H-pad-(y-minY)*scale];const svgNS='http://www.w3.org/2000/svg';const svg=document.createElementNS(svgNS,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('role','img');svg.setAttribute('aria-label','Mapa geográfico interativo dos 26 estados e Distrito Federal');
+function renderMap(data){const features=(data.features||[]).filter(f=>getUF(f));if(features.length<27)throw new Error('O arquivo geográfico não contém as 27 UFs esperadas.');const all=[];features.forEach(f=>coordsFromGeometry(f.geometry,all));const xs=all.map(c=>c[0]),ys=all.map(c=>c[1]);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);const W=900,H=780,pad=18,scale=Math.min((W-2*pad)/(maxX-minX),(H-2*pad)/(maxY-minY));const project=([x,y])=>[pad+(x-minX)*scale,H-pad-(y-minY)*scale];const svgNS='http://www.w3.org/2000/svg';const svg=document.createElementNS(svgNS,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('preserveAspectRatio','xMidYMid meet');svg.setAttribute('role','img');svg.setAttribute('aria-label','Mapa geográfico interativo dos 26 estados e Distrito Federal');
 for(const f of features){const uf=getUF(f);const path=document.createElementNS(svgNS,'path');let d='';const geom=f.geometry;const polygons=geom.type==='Polygon'?[geom.coordinates]:geom.type==='MultiPolygon'?geom.coordinates:[];for(const poly of polygons){for(const ring of poly){ring.forEach((c,i)=>{const [x,y]=project(c);d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2);});d+='Z';}}path.setAttribute('d',d);path.setAttribute('class','state-shape');path.setAttribute('data-uf',uf);path.setAttribute('tabindex','0');path.setAttribute('role','button');path.setAttribute('aria-label',stateNames[uf]);path.addEventListener('click',()=>selectState(uf,path));path.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectState(uf,path);}});svg.appendChild(path);
 const points=coordsFromGeometry(geom,[]);const center=[points.reduce((a,c)=>a+c[0],0)/points.length,points.reduce((a,c)=>a+c[1],0)/points.length];const [cx,cy]=project(center);const label=document.createElementNS(svgNS,'text');label.setAttribute('x',cx);label.setAttribute('y',cy);label.setAttribute('class','state-label');label.textContent=uf;svg.appendChild(label);}
 mapWrap.replaceChildren(svg);const initial=svg.querySelector('[data-uf="MT"]');if(initial)selectState('MT',initial);}
