@@ -110,6 +110,7 @@ async function mapStateResult({ ambiente, uf, cargo, election }) {
   try {
     const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
     if (!result.ok) return { uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "unavailable", http_status: result.status };
+    if (ambiente === "oficial" && result.data?.f !== "o") return { uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "unavailable", message: "phase_not_official" };
     const summary = summarizeResults(result.data);
     return {
       uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "connected",
@@ -203,17 +204,15 @@ export default async (request) => {
       status: "ok",
       service: "tse-portal-api",
       data_source: "not_yet_validated",
-      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial", "/api/results?ambiente=simulado&uf=sp&cargo=0001&eleicao=21270", "/api/map?ambiente=simulado&cargo=0003&eleicao=21272"]
+      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial", "/api/results?ambiente=oficial&uf=sp&cargo=0003&eleicao=6259", "/api/map?ambiente=oficial&cargo=0003&eleicao=6259"]
     });
   }
 
   if (path === "/map") {
-    const ambiente = (url.searchParams.get("ambiente") || "simulado").toLowerCase();
+    const ambiente = (url.searchParams.get("ambiente") || "oficial").toLowerCase();
     const cargo = normalizeOffice(url.searchParams.get("cargo") || "0003");
-    const election = normalizeElection(url.searchParams.get("eleicao") || "21272");
-    if (ambiente !== "simulado") {
-      return json({ error: "official_map_not_validated", message: "A consulta nacional de todos os estados deve ser validada no ambiente oficial antes de ser habilitada." }, 400);
-    }
+    const election = normalizeElection(url.searchParams.get("eleicao") || "6259");
+    if (!["oficial", "simulado"].includes(ambiente)) return json({ error: "invalid_environment", allowed: ["oficial", "simulado"] }, 400);
     if (!cargo || !election) return json({ error: "invalid_parameters", allowed_offices: ["0001", "0003", "0005", "0006", "0007", "0008"] }, 400);
     const requestedUf = normalizeUf(url.searchParams.get("uf"));
     const ufs = requestedUf && requestedUf !== "br"
@@ -227,7 +226,7 @@ export default async (request) => {
       status: available.length ? "partial_or_complete" : "no_results",
       source: "TSE",
       environment: ambiente,
-      phase: "simulado",
+      phase: ambiente === "oficial" ? "oficial" : "simulado",
       office_code: cargo,
       election_code: election,
       states_requested: states.length,
@@ -236,7 +235,7 @@ export default async (request) => {
       ranking_basis: "sections_counted_percent_desc",
       ranking,
       states,
-      note: "Dados de simulação. Estados sem arquivo disponível são informados como unavailable; não são tratados como 0% de apuração."
+      note: ambiente === "oficial" ? "Dados consultados no ambiente oficial do TSE. Estados sem arquivo disponível são informados como unavailable; não são tratados como 0% de apuração." : "Dados de simulação do TSE. Não representam resultados reais."
     });
   }
 
