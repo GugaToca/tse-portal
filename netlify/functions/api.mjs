@@ -1,4 +1,3 @@
-const TSE_BASE = "https://resultados.tse.jus.br";
 const CACHE_TTL_MS = 60_000;
 const memoryCache = new Map();
 
@@ -99,7 +98,10 @@ export default async (request) => {
     // na documentação/URL de referência recebida; o oficial pode não estar publicado
     // ou ter ciclo diferente. Não se tenta descobrir caminhos por tentativa e erro.
     const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
-    const sourceUrl = `${TSE_BASE}/${ambiente}/${cycle}/comum/config/ele-c.json`;
+    const host = ambiente === "simulado"
+      ? "https://resultados-sim.tse.jus.br"
+      : "https://resultados.tse.jus.br";
+    const sourceUrl = `${host}/${ambiente}/${cycle}/comum/config/ele-c.json`;
 
     try {
       const result = await fetchJsonOnce(`ea11:${ambiente}:${cycle}`, sourceUrl);
