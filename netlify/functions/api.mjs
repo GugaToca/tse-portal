@@ -121,9 +121,13 @@ export default async (request) => {
 
     const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
     const host = ambiente === "simulado" ? "https://resultados-sim.tse.jus.br" : "https://resultados.tse.jus.br";
-    const electionFileCode = election;
-    const fileName = `${uf}-c${cargo}-e${electionFileCode}-u.json`;
-    const sourceUrl = `${host}/${ambiente}/${cycle}/${Number(election)}/dados/${uf}/${fileName}`;
+    // A documentação do TSE coloca o ciclo eleitoral (ex.: ele2026)
+    // entre o ambiente e o código numérico da eleição. O diretório usa o
+    // código sem zeros à esquerda; o nome do arquivo usa seis dígitos.
+    // Presidente é resultado nacional (br), não estadual.
+    const scope = cargo === "0001" ? "br" : uf;
+    const fileName = `${scope}-c${cargo}-e${election}-u.json`;
+    const sourceUrl = `${host}/${ambiente}/${cycle}/ele2026/${Number(election)}/dados/${scope}/${fileName}`;
 
     try {
       const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
@@ -132,7 +136,7 @@ export default async (request) => {
           status: "result_unavailable",
           source: "TSE",
           environment: ambiente,
-          uf: uf.toUpperCase(),
+          uf: scope.toUpperCase(),
           office_code: cargo,
           election_code: election,
           attempted_url: sourceUrl,
@@ -147,7 +151,7 @@ export default async (request) => {
         source: "TSE",
         environment: ambiente,
         phase: ambiente === "simulado" ? "simulado" : "oficial_pendente_de_validacao",
-        uf: uf.toUpperCase(),
+        uf: scope.toUpperCase(),
         office_code: cargo,
         election_code: election,
         result_file: fileName,
