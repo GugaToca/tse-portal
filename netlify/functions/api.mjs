@@ -91,6 +91,62 @@ function normalizeElection(value) {
 
 const VALID_UFS = new Set(["br", "ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma", "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn", "rs", "ro", "rr", "sc", "sp", "se", "to"]);
 
+
+const UF_NAMES = {
+  ac: "Acre", al: "Alagoas", ap: "Amapá", am: "Amazonas", ba: "Bahia",
+  ce: "Ceará", df: "Distrito Federal", es: "Espírito Santo", go: "Goiás",
+  ma: "Maranhão", mt: "Mato Grosso", ms: "Mato Grosso do Sul", mg: "Minas Gerais",
+  pa: "Pará", pb: "Paraíba", pr: "Paraná", pe: "Pernambuco", pi: "Piauí",
+  rj: "Rio de Janeiro", rn: "Rio Grande do Norte", rs: "Rio Grande do Sul",
+  ro: "Rondônia", rr: "Roraima", sc: "Santa Catarina", sp: "São Paulo",
+  se: "Sergipe", to: "Tocantins"
+};
+
+async function mapStateResult({ ambiente, uf, cargo, election }) {
+  const cycle = ambiente === "simulado" ? "simulado2026" : "ele2026";
+  const host = ambiente === "simulado" ? "https://resultados-sim.tse.jus.br" : "https://resultados.tse.jus.br";
+  const fileName = `${uf}-c${cargo}-e${election}-u.json`;
+  const sourceUrl = `${host}/${ambiente}/${cycle}/ele2026/${Number(election)}/dados/${uf}/${fileName}`;
+  try {
+    const result = await fetchJsonOnce(`result:${ambiente}:${uf}:${cargo}:${election}`, sourceUrl);
+    if (!result.ok) return { uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "unavailable", http_status: result.status };
+    const summary = summarizeResults(result.data);
+    return {
+      uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "connected",
+      sections_total: summary.turnout.sections_total,
+      sections_counted: summary.turnout.sections_counted,
+      sections_counted_percent: summary.turnout.sections_counted_percent,
+      electors_total: summary.turnout.electors_total,
+      votes_total: summary.turnout.votes_total,
+      updated_date: summary.updated_date,
+      updated_time: summary.updated_time,
+      leader: summary.candidates[0] ? {
+        name: summary.candidates[0].name,
+        party: summary.candidates[0].party,
+        votes: summary.candidates[0].votes,
+        vote_percent: summary.candidates[0].vote_percent
+      } : null,
+      cached: result.cached
+    };
+  } catch (error) {
+    return { uf: uf.toUpperCase(), state: UF_NAMES[uf], status: "unavailable", message: error?.name === "TimeoutError" ? "timeout" : "fetch_error" };
+  }
+}
+
+async function runWithConcurrency(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await task(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function summarizeResults(data) {
   const candidates = [];
   const seen = new Set();
@@ -147,7 +203,40 @@ export default async (request) => {
       status: "ok",
       service: "tse-portal-api",
       data_source: "not_yet_validated",
-      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial", "/api/results?ambiente=simulado&uf=sp&cargo=0001&eleicao=21270"]
+      endpoints: ["/api/health", "/api/tse-config?ambiente=simulado", "/api/tse-config?ambiente=oficial", "/api/elections?ambiente=simulado", "/api/elections?ambiente=oficial", "/api/results?ambiente=simulado&uf=sp&cargo=0001&eleicao=21270", "/api/map?ambiente=simulado&cargo=0003&eleicao=21272"]
+    });
+  }
+
+  if (path === "/map") {
+    const ambiente = (url.searchParams.get("ambiente") || "simulado").toLowerCase();
+    const cargo = normalizeOffice(url.searchParams.get("cargo") || "0003");
+    const election = normalizeElection(url.searchParams.get("eleicao") || "21272");
+    if (ambiente !== "simulado") {
+      return json({ error: "official_map_not_validated", message: "A consulta nacional de todos os estados deve ser validada no ambiente oficial antes de ser habilitada." }, 400);
+    }
+    if (!cargo || !election) return json({ error: "invalid_parameters", allowed_offices: ["0001", "0003", "0005", "0006", "0007", "0008"] }, 400);
+    const requestedUf = normalizeUf(url.searchParams.get("uf"));
+    const ufs = requestedUf && requestedUf !== "br"
+      ? (VALID_UFS.has(requestedUf) && requestedUf !== "br" ? [requestedUf] : null)
+      : Object.keys(UF_NAMES);
+    if (!ufs) return json({ error: "invalid_uf", message: "Informe uma UF válida ou omita uf para consultar os estados." }, 400);
+    const states = await runWithConcurrency(ufs, 3, uf => mapStateResult({ ambiente, uf, cargo, election }));
+    const available = states.filter(item => item.status === "connected");
+    const ranking = [...available].sort((a, b) => b.sections_counted_percent - a.sections_counted_percent || b.sections_counted - a.sections_counted);
+    return json({
+      status: available.length ? "partial_or_complete" : "no_results",
+      source: "TSE",
+      environment: ambiente,
+      phase: "simulado",
+      office_code: cargo,
+      election_code: election,
+      states_requested: states.length,
+      states_available: available.length,
+      states_unavailable: states.length - available.length,
+      ranking_basis: "sections_counted_percent_desc",
+      ranking,
+      states,
+      note: "Dados de simulação. Estados sem arquivo disponível são informados como unavailable; não são tratados como 0% de apuração."
     });
   }
 
@@ -305,5 +394,5 @@ export default async (request) => {
     }
   }
 
-  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections", "/api/results", "/api/results?formato=resumo"] }, 404);
+  return json({ error: "not_found", available_endpoints: ["/api/health", "/api/tse-config", "/api/elections", "/api/results", "/api/results?formato=resumo", "/api/map"] }, 404);
 };
